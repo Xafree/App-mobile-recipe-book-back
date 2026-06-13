@@ -8,6 +8,8 @@ public record NutrimentRecord(
         double proteins100g,
         double carbohydrates100g,
         double fat100g,
-        double fiber100g
+        double fiber100g,
+        double sugars100g,
+        double saturatedFat100g
 ) {
 }

@@ -45,6 +45,7 @@ public class ProductTransform {
                 product.getTrace() != null ? product.getTrace().stream().map(traceTransform::fromTrace).collect(Collectors.toList()) : null,
                 product.getAdditives() != null ? product.getAdditives().stream().map(additiveTransform::fromAdditive).collect(Collectors.toList()) : null, // [NEW]
                 product.getNutriscore(),
+                product.getNutriscoreGrade(),
                 product.getNutriment() != null ? nutrimentTransform.fromNutriment(product.getNutriment()) : null,
                 product.getGlucide() != null ? glucideTransform.fromGlucide(product.getGlucide()) : null,
                 product.getVitamin() != null ? vitaminTransform.fromVitamin(product.getVitamin()) : null,
@@ -87,6 +88,7 @@ public class ProductTransform {
                 null,   // trace      ← idem
                 null,   // additives  ← idem
                 0,      // nutriscore
+                null,   // nutriscoreGrade
                 product.getNutriment() != null
                         ? nutrimentTransform.fromNutriment(product.getNutriment())
                         : null,

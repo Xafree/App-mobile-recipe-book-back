@@ -31,4 +31,10 @@ public class Nutriment {
 
     // fiber_100g
     private double fiber100g;
+
+    // sugars_100g
+    private double sugars100g;
+
+    // saturated-fat_100g
+    private double saturatedFat100g;
 }

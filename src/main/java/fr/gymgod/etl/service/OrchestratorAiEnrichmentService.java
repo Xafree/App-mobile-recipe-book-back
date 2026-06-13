@@ -29,8 +29,8 @@ public class OrchestratorAiEnrichmentService {
     private final ReferenceDataPort referenceDataPort;
     private final PlatformTransactionManager transactionManager;
 
-    private static final int BATCH_SIZE = 50;
-    private static final int THREAD_POOL_SIZE = 3;
+    private static final int BATCH_SIZE = 100;
+    private static final int THREAD_POOL_SIZE = 1;
 
     private final ExecutorService executor = Executors.newFixedThreadPool(THREAD_POOL_SIZE);
 

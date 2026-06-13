@@ -131,6 +131,10 @@ public class OrchestratorRecipe {
             item.setCarbsPer100g(payload.nutrition().carbsPer100g());
             item.setFatPer100g(payload.nutrition().fatPer100g());
             item.setFiberPer100g(payload.nutrition().fiberPer100g());
+            item.setSugarPer100g(payload.nutrition().sugarPer100g());
+            item.setSaturatedFatPer100g(payload.nutrition().saturatedFatPer100g());
+            item.setTransFatPer100g(payload.nutrition().transFatPer100g());
+            item.setSodiumPer100g(payload.nutrition().sodiumPer100g());
             item.setExternalFoodCode(payload.externalFoodCode());
             item.setExternalProductSnapshot(payload.externalProductSnapshot());
             recipe.addIngredient(item);

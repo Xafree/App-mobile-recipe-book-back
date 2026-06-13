@@ -46,11 +46,25 @@ public class ProductMapper {
         p.setAdditives(new ArrayList<>());
 
         p.setNutriscore(EtlDataParser.getValueInt(columns, 57));
-        p.setNutriment(nutriment(columns, 89, 150, 129, 92, 146));
+        p.setNutriscoreGrade(EtlDataParser.getValue(columns, 58));
+        p.setNutriment(nutriment(columns, 89, 150, 129, 92, 146, 130, 93));
         p.setGlucide(glucide(columns, 156, 154, 175, 180, 177));
         p.setVitamin(vitamin(columns, 158, 160, 161, 162, 163, 164, 165, 166, 167, 168, 170));
+        p.setNutritionDataIncomplete(isNutritionDataIncomplete(columns));
 
         return p;
+    }
+
+    /**
+     * Vrai si le groupe macros, minéraux OU vitamines est entièrement vide dans
+     * la ligne CSV — sert à déclencher l'enrichissement à la demande via l'API
+     * OpenFoodFacts (cf. NutritionEnrichmentService).
+     */
+    private boolean isNutritionDataIncomplete(String[] columns) {
+        boolean nutrimentEmpty = EtlDataParser.allEmpty(columns, 89, 150, 129, 92, 146, 130, 93);
+        boolean glucideEmpty = EtlDataParser.allEmpty(columns, 156, 154, 175, 180, 177);
+        boolean vitaminEmpty = EtlDataParser.allEmpty(columns, 158, 160, 161, 162, 163, 164, 165, 166, 167, 168, 170);
+        return nutrimentEmpty || glucideEmpty || vitaminEmpty;
     }
 
     private String quantity(String[] columns) {
@@ -191,13 +205,17 @@ public class ProductMapper {
             int idxProteins100g,
             int idxCarbohydrates100g,
             int idxFat100g,
-            int idxFiber100g) {
+            int idxFiber100g,
+            int idxSugars100g,
+            int idxSaturatedFat100g) {
         Nutriment nutriment = new Nutriment();
         nutriment.setEnergyKcal100g(EtlDataParser.getValueDouble(columns, idxEnergyKcal100g));
         nutriment.setProteins100g(EtlDataParser.getValueDouble(columns, idxProteins100g));
         nutriment.setCarbohydrates100g(EtlDataParser.getValueDouble(columns, idxCarbohydrates100g));
         nutriment.setFat100g(EtlDataParser.getValueDouble(columns, idxFat100g));
         nutriment.setFiber100g(EtlDataParser.getValueDouble(columns, idxFiber100g));
+        nutriment.setSugars100g(EtlDataParser.getValueDouble(columns, idxSugars100g));
+        nutriment.setSaturatedFat100g(EtlDataParser.getValueDouble(columns, idxSaturatedFat100g));
 
         return nutriment;
     }

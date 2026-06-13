@@ -67,6 +67,8 @@ public class SecurityConfig {
                 // ── Recettes — images publiques, reste authentifié ────────────────────
                 .requestMatchers(HttpMethod.GET, "/api/v1/recipes/image/**").permitAll()
                 .requestMatchers("/api/v1/recipes/**").authenticated()
+                // ── Catalogue d'ingrédients partagé — authentifié uniquement ──────────
+                .requestMatchers("/api/v1/ingredients/**").authenticated()
                 // ── Auth + repas + utilisateur ────────────────────────────────────────
                 .requestMatchers(LOGIN_URL, "/api/auth/**", "/api/user",
                     "/nutrition/meals/**").permitAll()

@@ -46,16 +46,37 @@ public class LlmClient {
     }
 
     public String call(String prompt) {
-        return call(prompt, null, "json");
+        return call(prompt, null);
     }
 
-    public String call(String prompt, java.util.Map<String, Object> options) {
-        return call(prompt, options, "json");
-    }
-
-    public String call(String prompt, java.util.Map<String, Object> options, String format) {
+    /**
+     * Appelle le LLM. {@code params} peut contenir :
+     * <ul>
+     * <li>{@code format} : "json" (défaut) ou un schéma JSON ({@code Map}) pour
+     * contraindre la structure de la réponse</li>
+     * <li>{@code temperature} : transmis dans les {@code options} Ollama</li>
+     * <li>{@code options} : autres paramètres du modèle (num_ctx,
+     * num_predict...), fusionnés dans les {@code options} Ollama</li>
+     * </ul>
+     */
+    public String call(String prompt, java.util.Map<String, Object> params) {
         if (!enabled) {
             return null;
+        }
+
+        Object format = "json";
+        java.util.Map<String, Object> ollamaOptions = new java.util.HashMap<>();
+
+        if (params != null) {
+            if (params.containsKey("format")) {
+                format = params.get("format");
+            }
+            if (params.get("options") instanceof java.util.Map<?, ?> nestedOptions) {
+                nestedOptions.forEach((key, value) -> ollamaOptions.put(String.valueOf(key), value));
+            }
+            if (params.containsKey("temperature")) {
+                ollamaOptions.put("temperature", params.get("temperature"));
+            }
         }
 
         LlmRequest request = LlmRequest.builder()
@@ -63,7 +84,7 @@ public class LlmClient {
                 .prompt(prompt)
                 .format(format)
                 .stream(false)
-                .options(options)
+                .options(ollamaOptions)
                 .build();
 
         try {

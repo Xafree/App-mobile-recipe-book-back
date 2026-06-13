@@ -18,6 +18,7 @@ public record ProductRecord(
         List<TraceRecord> trace,
         List<AdditiveRecord> additives, // [NEW]
         int nutriscore,
+        String nutriscoreGrade,
         NutrimentRecord nutriment,
         GlucideRecord glucide,
         VitaminRecord vitamin,
