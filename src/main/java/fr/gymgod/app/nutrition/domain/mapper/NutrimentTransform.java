@@ -14,7 +14,9 @@ public class NutrimentTransform {
                 nutriment.getProteins100g(),
                 nutriment.getCarbohydrates100g(),
                 nutriment.getFat100g(),
-                nutriment.getFiber100g()
+                nutriment.getFiber100g(),
+                nutriment.getSugars100g(),
+                nutriment.getSaturatedFat100g()
         );
     }
 }

@@ -57,6 +57,18 @@ public class RecipeItem {
     @Column(name = "fiber_per100g", precision = 5, scale = 2)
     private BigDecimal fiberPer100g;
 
+    @Column(name = "sugar_per100g", precision = 5, scale = 2)
+    private BigDecimal sugarPer100g;
+
+    @Column(name = "saturated_fat_per100g", precision = 5, scale = 2)
+    private BigDecimal saturatedFatPer100g;
+
+    @Column(name = "trans_fat_per100g", precision = 5, scale = 2)
+    private BigDecimal transFatPer100g;
+
+    @Column(name = "sodium_per100g", precision = 7, scale = 2)
+    private BigDecimal sodiumPer100g;
+
     @Column(name = "external_food_code", length = 64)
     private String externalFoodCode;
 

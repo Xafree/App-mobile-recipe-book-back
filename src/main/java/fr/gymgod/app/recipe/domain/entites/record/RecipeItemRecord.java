@@ -17,6 +17,10 @@ public record RecipeItemRecord(
         BigDecimal carbsPer100g,
         BigDecimal fatPer100g,
         BigDecimal fiberPer100g,
+        BigDecimal sugarPer100g,
+        BigDecimal saturatedFatPer100g,
+        BigDecimal transFatPer100g,
+        BigDecimal sodiumPer100g,
         String externalFoodCode,
         Map<String, Object> externalProductSnapshot,
         Instant createdAt

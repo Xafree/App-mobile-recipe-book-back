@@ -82,6 +82,11 @@ public class Product {
     // nutriscore_score
     private int nutriscore;
 
+    // nutriscore_grade — l'export OFF contient aussi "unknown" et
+    // "not-applicable" en plus des grades a-e.
+    @Column(length = 20)
+    private String nutriscoreGrade;
+
     @OneToOne(cascade = CascadeType.ALL)
     private Nutriment nutriment;
 
@@ -99,4 +104,13 @@ public class Product {
 
     @Column(columnDefinition = "TEXT")
     private String aiError;
+
+    // true si les macros, minéraux ou vitamines sont entièrement absents de
+    // l'export CSV pour ce produit — déclenche un enrichissement à la demande
+    // via l'API OpenFoodFacts (cf. NutritionEnrichmentService).
+    @Column(nullable = false, columnDefinition = "boolean default false")
+    private boolean nutritionDataIncomplete = false;
+
+    @Column(columnDefinition = "TEXT")
+    private String nutritionEnrichmentError;
 }

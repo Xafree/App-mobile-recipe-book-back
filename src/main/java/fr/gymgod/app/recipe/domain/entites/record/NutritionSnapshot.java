@@ -8,6 +8,7 @@ import java.math.BigDecimal;
 
 import static fr.gymgod.common.constants.RecipeConstants.MAX_CALORIES_PER_100G;
 import static fr.gymgod.common.constants.RecipeConstants.MAX_MACRO_PER_100G;
+import static fr.gymgod.common.constants.RecipeConstants.MAX_SODIUM_MG_PER_100G;
 
 public record NutritionSnapshot(
 
@@ -33,5 +34,21 @@ public record NutritionSnapshot(
 
         @PositiveOrZero(message = "Fiber per 100g must not be negative")
         @DecimalMax(value = MAX_MACRO_PER_100G, message = "Fiber per 100g cannot exceed 100g")
-        BigDecimal fiberPer100g
+        BigDecimal fiberPer100g,
+
+        @PositiveOrZero(message = "Sugar per 100g must not be negative")
+        @DecimalMax(value = MAX_MACRO_PER_100G, message = "Sugar per 100g cannot exceed 100g")
+        BigDecimal sugarPer100g,
+
+        @PositiveOrZero(message = "Saturated fat per 100g must not be negative")
+        @DecimalMax(value = MAX_MACRO_PER_100G, message = "Saturated fat per 100g cannot exceed 100g")
+        BigDecimal saturatedFatPer100g,
+
+        @PositiveOrZero(message = "Trans fat per 100g must not be negative")
+        @DecimalMax(value = MAX_MACRO_PER_100G, message = "Trans fat per 100g cannot exceed 100g")
+        BigDecimal transFatPer100g,
+
+        @PositiveOrZero(message = "Sodium per 100g must not be negative")
+        @DecimalMax(value = MAX_SODIUM_MG_PER_100G, message = "Sodium per 100g is implausibly high")
+        BigDecimal sodiumPer100g
 ) {}

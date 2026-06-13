@@ -34,6 +34,28 @@ public class EtlDataParser {
     }
 
     /**
+     * Returns {@code true} if the column at {@code index} is missing or blank
+     * (as opposed to a real value of {@code 0}).
+     */
+    public static boolean isEmpty(String[] columns, int index) {
+        return getValue(columns, index) == null;
+    }
+
+    /**
+     * Returns {@code true} if every column at the given {@code indices} is
+     * missing or blank — used to detect whole groups of nutrition data
+     * (macros, minerals, vitamins) that are absent from the source row.
+     */
+    public static boolean allEmpty(String[] columns, int... indices) {
+        for (int index : indices) {
+            if (!isEmpty(columns, index)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
      * Splits a string by commas, ignoring commas inside parentheses.
      * Handles nested parentheses.
      */

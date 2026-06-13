@@ -70,6 +70,11 @@ public class HttpRequestGateway implements FileDownloaderPort {
             return true;
         }
 
+        if (fileGateway.isDownloadQuotaExceeded()) {
+            log.debug("Image download quota reached, skipping: {}", name);
+            return false;
+        }
+
         try (HttpGateway.HttpResponse response = httpGateway.get(url)) {
             fileGateway.saveImage(response.getInputStream(), name);
             log.info("Image successfully downloaded and saved: {} from URL: {}", name, url);

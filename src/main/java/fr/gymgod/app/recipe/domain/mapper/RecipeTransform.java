@@ -52,6 +52,10 @@ public class RecipeTransform {
                 item.getCarbsPer100g(),
                 item.getFatPer100g(),
                 item.getFiberPer100g(),
+                item.getSugarPer100g(),
+                item.getSaturatedFatPer100g(),
+                item.getTransFatPer100g(),
+                item.getSodiumPer100g(),
                 item.getExternalFoodCode(),
                 item.getExternalProductSnapshot(),
                 item.getCreatedAt());

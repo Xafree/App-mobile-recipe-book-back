@@ -1,5 +1,7 @@
 package fr.gymgod.app.nutrition.controller;
 
+import fr.gymgod.app.nutrition.domain.entites.record.OcrLabelParseRequest;
+import fr.gymgod.app.nutrition.domain.entites.record.OcrNutritionRecord;
 import fr.gymgod.app.nutrition.domain.entites.record.ProductRecord;
 import fr.gymgod.app.nutrition.service.OrchestratorNutrition;
 import fr.gymgod.common.constants.ConstantsCommon;
@@ -30,7 +32,14 @@ public class NutritionControllerAdapter {
     public ResponseEntity<ProductRecord> get(@PathVariable String key) {
         System.out.println("Recherche du produit : " + key);
         ProductRecord product = this.orchestratorNutrition.getProduct(key);
+        System.out.println("return product: " + product);
         return ResponseEntity.ok(product);
+    }
+
+    @PostMapping("/ocr/parse-label")
+    public ResponseEntity<OcrNutritionRecord> parseLabel(@RequestBody OcrLabelParseRequest request) {
+        OcrNutritionRecord record = this.orchestratorNutrition.parseOcrLabel(request.rawText());
+        return ResponseEntity.ok(record);
     }
 
     @GetMapping("/search")

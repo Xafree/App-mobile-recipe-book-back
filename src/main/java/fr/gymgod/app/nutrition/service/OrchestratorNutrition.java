@@ -1,10 +1,14 @@
 package fr.gymgod.app.nutrition.service;
 
 import fr.gymgod.app.nutrition.domain.port.NutritionDataPort;
+import fr.gymgod.app.nutrition.domain.entites.record.OcrNutritionRecord;
 import fr.gymgod.app.nutrition.domain.entites.record.ProductRecord;
 import fr.gymgod.app.nutrition.domain.mapper.ProductTransform;
 import fr.gymgod.common.entities.nutrition.Product;
 import fr.gymgod.common.entities.user.UserAccount;
+import fr.gymgod.etl.domain.model.OcrNutritionData;
+import fr.gymgod.etl.domain.port.OcrLabelParsingPort;
+import fr.gymgod.etl.service.NutritionEnrichmentService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.AnonymousAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -23,10 +27,42 @@ public class OrchestratorNutrition {
 
     private final NutritionDataPort nutritionDataPort;
     private final ProductTransform productTransform;
+    private final NutritionEnrichmentService nutritionEnrichmentService;
+    private final OcrLabelParsingPort ocrLabelParsingPort;
 
     public ProductRecord getProduct(String key) {
         Product product = this.nutritionDataPort.getProduct(key);
+        product = this.nutritionEnrichmentService.enrichIfNeeded(product);
         return this.productTransform.fromProduct(product);
+    }
+
+    /**
+     * Extrait les valeurs nutritionnelles (énergie, protéines, glucides,
+     * lipides pour 100g, nom du produit) depuis le texte brut OCR d'une
+     * étiquette — utilisé pour pré-remplir la saisie manuelle d'un ingrédient.
+     *
+     * <p>En cas d'échec du LLM, renvoie un {@link OcrNutritionRecord} vide
+     * (tous champs {@code null}) plutôt qu'une erreur — le client retombe
+     * sur un formulaire vierge.
+     */
+    public OcrNutritionRecord parseOcrLabel(String rawText) {
+        return ocrLabelParsingPort.parseLabel(rawText)
+                .map(this::toOcrNutritionRecord)
+                .orElseGet(() -> new OcrNutritionRecord(null, null, null, null, null, null, null, null, null, null));
+    }
+
+    private OcrNutritionRecord toOcrNutritionRecord(OcrNutritionData data) {
+        return new OcrNutritionRecord(
+                data.productName(),
+                data.energyKcal100g(),
+                data.proteins100g(),
+                data.carbohydrates100g(),
+                data.fat100g(),
+                data.sugars100g(),
+                data.saturatedFat100g(),
+                data.transFat100g(),
+                data.fiber100g(),
+                data.sodium100g());
     }
 
     public List<ProductRecord> searchProducts(String name, int page, int size) {
