@@ -7,6 +7,7 @@ import fr.gymgod.app.recipe.domain.entites.record.RecipeRecord;
 import fr.gymgod.app.recipe.domain.mapper.RecipeTransform;
 import fr.gymgod.app.recipe.domain.port.RecipeDataPort;
 import fr.gymgod.common.constants.RecipeConstants;
+import fr.gymgod.common.domain.user.UserAccountRepository;
 import fr.gymgod.common.entities.nutrition.Recipe;
 import fr.gymgod.common.entities.nutrition.RecipeItem;
 import fr.gymgod.common.entities.user.UserAccount;
@@ -26,6 +27,7 @@ public class OrchestratorRecipe {
 
     private final RecipeDataPort recipeDataPort;
     private final RecipeTransform recipeTransform;
+    private final UserAccountRepository userAccountRepository;
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     public List<RecipeRecord> getUserRecipes() {
@@ -50,6 +52,37 @@ public class OrchestratorRecipe {
             throw new RuntimeException("Accès refusé : cette recette ne vous appartient pas.");
         }
         return recipeTransform.fromRecipe(recipe);
+    }
+
+    /**
+     * Retourne le détail complet d'une recette publique sans vérification d'ownership.
+     * Retourne une erreur 404 si la recette n'existe pas ou n'est pas publique,
+     * afin de ne pas exposer l'existence des recettes privées.
+     */
+    public RecipeRecord getPublicRecipe(UUID id) {
+        Recipe recipe = recipeDataPort.findRecipeById(id)
+                .orElseThrow(() -> new RecipeNotFoundException(id));
+        if (!Boolean.TRUE.equals(recipe.getIsPublic())) {
+            throw new RecipeNotFoundException(id);
+        }
+        String authorName = resolveDisplayName(recipe.getUserId());
+        return recipeTransform.fromRecipe(recipe, authorName);
+    }
+
+    /** Résout le nom d'affichage d'un utilisateur à partir de son UUID. */
+    private String resolveDisplayName(UUID userId) {
+        return userAccountRepository.findById(userId)
+                .map(u -> {
+                    String first = u.getFirstName();
+                    String last = u.getLastName();
+                    if (first != null && !first.isBlank()) {
+                        return last != null && !last.isBlank()
+                                ? first + " " + last
+                                : first;
+                    }
+                    return u.getUsername() != null ? u.getUsername() : "Utilisateur";
+                })
+                .orElse("Utilisateur");
     }
 
     @Transactional

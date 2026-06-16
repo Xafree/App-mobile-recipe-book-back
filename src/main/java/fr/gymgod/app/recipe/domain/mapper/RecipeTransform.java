@@ -12,6 +12,10 @@ import java.util.stream.Collectors;
 public class RecipeTransform {
 
     public RecipeRecord fromRecipe(Recipe recipe) {
+        return fromRecipe(recipe, null);
+    }
+
+    public RecipeRecord fromRecipe(Recipe recipe, String authorName) {
         if (recipe == null) return null;
         return new RecipeRecord(
                 recipe.getId(),
@@ -35,7 +39,8 @@ public class RecipeTransform {
                         : null,
                 recipe.getSteps(),
                 recipe.getCreatedAt(),
-                recipe.getUpdatedAt());
+                recipe.getUpdatedAt(),
+                authorName);
     }
 
     public RecipeItemRecord fromRecipeItem(RecipeItem item) {

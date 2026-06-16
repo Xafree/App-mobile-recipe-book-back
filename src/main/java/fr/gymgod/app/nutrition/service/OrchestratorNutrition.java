@@ -3,12 +3,14 @@ package fr.gymgod.app.nutrition.service;
 import fr.gymgod.app.nutrition.domain.port.NutritionDataPort;
 import fr.gymgod.app.nutrition.domain.entites.record.OcrNutritionRecord;
 import fr.gymgod.app.nutrition.domain.entites.record.ProductRecord;
+import fr.gymgod.app.nutrition.domain.mapper.OcrNutritionTransform;
 import fr.gymgod.app.nutrition.domain.mapper.ProductTransform;
+import fr.gymgod.common.entities.nutrition.Nutriment;
 import fr.gymgod.common.entities.nutrition.Product;
 import fr.gymgod.common.entities.user.UserAccount;
-import fr.gymgod.etl.domain.model.OcrNutritionData;
 import fr.gymgod.etl.domain.port.OcrLabelParsingPort;
 import fr.gymgod.etl.service.NutritionEnrichmentService;
+import fr.gymgod.etl.service.OffProductImportService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.AnonymousAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -28,18 +30,29 @@ public class OrchestratorNutrition {
     private final NutritionDataPort nutritionDataPort;
     private final ProductTransform productTransform;
     private final NutritionEnrichmentService nutritionEnrichmentService;
+    private final OffProductImportService offProductImportService;
     private final OcrLabelParsingPort ocrLabelParsingPort;
+    private final OcrNutritionTransform ocrNutritionTransform;
 
     public ProductRecord getProduct(String key) {
         Product product = this.nutritionDataPort.getProduct(key);
-        product = this.nutritionEnrichmentService.enrichIfNeeded(product);
+        if (product == null) {
+            // Code-barres absent de la base locale — cas typique d'un scan en
+            // magasin d'un produit jamais importé par l'ETL : on tente une
+            // récupération en direct sur OpenFoodFacts et on l'enregistre pour
+            // les prochains scans.
+            product = this.offProductImportService.importProduct(key);
+        } else {
+            product = this.nutritionEnrichmentService.enrichIfNeeded(product);
+        }
         return this.productTransform.fromProduct(product);
     }
 
     /**
      * Extrait les valeurs nutritionnelles (énergie, protéines, glucides,
-     * lipides pour 100g, nom du produit) depuis le texte brut OCR d'une
-     * étiquette — utilisé pour pré-remplir la saisie manuelle d'un ingrédient.
+     * lipides pour la portion imprimée, nom du produit) depuis le texte brut
+     * OCR d'une étiquette — utilisé pour pré-remplir la saisie manuelle d'un
+     * ingrédient.
      *
      * <p>En cas d'échec du LLM, renvoie un {@link OcrNutritionRecord} vide
      * (tous champs {@code null}) plutôt qu'une erreur — le client retombe
@@ -47,22 +60,8 @@ public class OrchestratorNutrition {
      */
     public OcrNutritionRecord parseOcrLabel(String rawText) {
         return ocrLabelParsingPort.parseLabel(rawText)
-                .map(this::toOcrNutritionRecord)
-                .orElseGet(() -> new OcrNutritionRecord(null, null, null, null, null, null, null, null, null, null));
-    }
-
-    private OcrNutritionRecord toOcrNutritionRecord(OcrNutritionData data) {
-        return new OcrNutritionRecord(
-                data.productName(),
-                data.energyKcal100g(),
-                data.proteins100g(),
-                data.carbohydrates100g(),
-                data.fat100g(),
-                data.sugars100g(),
-                data.saturatedFat100g(),
-                data.transFat100g(),
-                data.fiber100g(),
-                data.sodium100g());
+                .map(ocrNutritionTransform::toRecord)
+                .orElseGet(ocrNutritionTransform::empty);
     }
 
     public List<ProductRecord> searchProducts(String name, int page, int size) {
@@ -99,12 +98,26 @@ public class OrchestratorNutrition {
             }
         }
 
+        // 4. Masquage des produits sans aucune valeur nutritionnelle (énergie,
+        //    protéines, glucides, lipides toutes à 0) — souvent des imports OFF
+        //    incomplets, inutilisables pour le suivi nutritionnel.
+        finalProducts = finalProducts.stream().filter(this::hasNutritionData).collect(Collectors.toList());
+
         // fromProductForSearch évite le problème N+1 : ne touche pas les
         // associations ManyToMany (categorie, label, ingredient, allergen…),
         // qui déclencheraient sinon 7 × taille-de-page requêtes SQL.
         return finalProducts.stream()
                 .map(this.productTransform::fromProductForSearch)
                 .collect(Collectors.toList());
+    }
+
+    private boolean hasNutritionData(Product p) {
+        Nutriment nutriment = p.getNutriment();
+        if (nutriment == null) {
+            return false;
+        }
+        return nutriment.getEnergyKcal100g() > 0 || nutriment.getProteins100g() > 0
+                || nutriment.getCarbohydrates100g() > 0 || nutriment.getFat100g() > 0;
     }
 
     /**

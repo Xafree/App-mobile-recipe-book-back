@@ -24,5 +24,7 @@ public record RecipeRecord(
         List<RecipeItemRecord> ingredients,
         List<Map<String, Object>> steps,
         Instant createdAt,
-        Instant updatedAt
+        Instant updatedAt,
+        /** Nom d'affichage de l'auteur — null pour les recettes de l'utilisateur courant. */
+        String authorName
 ) {}

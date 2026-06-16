@@ -45,4 +45,9 @@ public class ProductDataGateway implements ProductDataPort {
         return productRepository.findTop50ByAiEnrichedFalseAndIngredientsTextIsNotNull(
                 PageRequest.of(0, limit));
     }
+
+    @Override
+    public List<Product> getPendingReferenceEnrichment(int limit) {
+        return productRepository.findPendingReferenceEnrichment(PageRequest.of(0, limit));
+    }
 }

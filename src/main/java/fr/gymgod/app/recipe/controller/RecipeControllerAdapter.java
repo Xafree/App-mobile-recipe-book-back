@@ -53,6 +53,16 @@ public class RecipeControllerAdapter {
         }
     }
 
+    @GetMapping("/{id}/public")
+    public ResponseEntity<RecipeRecord> getPublicRecipe(@PathVariable UUID id) {
+        RecipeRecord recipe = orchestratorRecipe.getPublicRecipe(id);
+        if (recipe != null) {
+            return ResponseEntity.ok(recipe);
+        } else {
+            return ResponseEntity.notFound().build();
+        }
+    }
+
     @PostMapping
     public ResponseEntity<RecipeRecord> createRecipe(@RequestBody @Valid RecipeCreateRecord request) {
         RecipeRecord created = orchestratorRecipe.createRecipe(request);

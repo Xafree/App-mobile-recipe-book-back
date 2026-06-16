@@ -39,6 +39,15 @@ public interface ProductRepository extends JpaRepository<Product, String> {
     @org.springframework.data.jpa.repository.Query("SELECT p FROM Product p WHERE p.aiEnriched = false AND p.ingredientsText IS NOT NULL AND p.ingredientsText <> ''")
     List<Product> findTop50ByAiEnrichedFalseAndIngredientsTextIsNotNull(org.springframework.data.domain.Pageable pageable);
 
+    /**
+     * Produits bruts/génériques (sans marque) dont les macros sont
+     * manquantes et qui n'ont pas encore été soumis au job hebdomadaire
+     * {@code ReferenceFoodEnrichmentJobAdapter} (correspondance CIQUAL/USDA).
+     */
+    @org.springframework.data.jpa.repository.Query("SELECT p FROM Product p WHERE p.nutritionDataIncomplete = true " +
+            "AND p.referenceEnrichmentAttempted = false AND p.brand IS NULL")
+    List<Product> findPendingReferenceEnrichment(org.springframework.data.domain.Pageable pageable);
+
     @org.springframework.data.jpa.repository.Query("SELECT p FROM Product p WHERE p.image IS NOT NULL AND (" +
             "(p.image.imageUrl IS NOT NULL AND p.image.isImageUrlDownload = false) OR " +
             "(p.image.imageIngredientUrl IS NOT NULL AND p.image.isImageIngredientUrlDownload = false) OR " +
