@@ -18,4 +18,6 @@ public interface ProductDataPort {
     Product save(Product product);
 
     List<Product> getPendingAiEnrichment(int limit);
+
+    List<Product> getPendingReferenceEnrichment(int limit);
 }

@@ -113,4 +113,15 @@ public class Product {
 
     @Column(columnDefinition = "TEXT")
     private String nutritionEnrichmentError;
+
+    // true une fois que le job hebdomadaire ReferenceFoodEnrichmentJobAdapter
+    // a tenté une correspondance CIQUAL/USDA pour ce produit (avec ou sans
+    // résultat) — évite de retraiter le produit aux exécutions suivantes.
+    @Column(nullable = false, columnDefinition = "boolean default false")
+    private boolean referenceEnrichmentAttempted = false;
+
+    // Traçabilité de la correspondance trouvée par le job de référence, ex.
+    // "CIQUAL:CIQUAL_007" — null si aucune correspondance n'a été trouvée.
+    @Column(columnDefinition = "TEXT")
+    private String referenceFoodMatch;
 }

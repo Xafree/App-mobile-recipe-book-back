@@ -104,6 +104,18 @@
             <artifactId>bucket4j-core</artifactId>
             <version>8.10.1</version>
         </dependency>
+        <!-- Lecture du fichier Excel CIQUAL (table de composition nutritionnelle) -->
+        <dependency>
+            <groupId>org.apache.poi</groupId>
+            <artifactId>poi-ooxml</artifactId>
+            <version>5.3.0</version>
+        </dependency>
+        <!-- Lecture des CSV relationnels USDA FoodData Central (champs avec virgules entre guillemets) -->
+        <dependency>
+            <groupId>org.apache.commons</groupId>
+            <artifactId>commons-csv</artifactId>
+            <version>1.11.0</version>
+        </dependency>
     </dependencies>
 
     <build>
