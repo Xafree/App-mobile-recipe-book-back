@@ -7,9 +7,12 @@ import fr.gymgod.app.recipe.domain.entites.record.RecipeRecord;
 import fr.gymgod.app.recipe.domain.mapper.RecipeTransform;
 import fr.gymgod.app.recipe.domain.port.RecipeDataPort;
 import fr.gymgod.common.constants.RecipeConstants;
+import fr.gymgod.common.domain.nutrition.RecipeRepository;
+import fr.gymgod.common.domain.nutrition.UserLikedRecipeRepository;
 import fr.gymgod.common.domain.user.UserAccountRepository;
 import fr.gymgod.common.entities.nutrition.Recipe;
 import fr.gymgod.common.entities.nutrition.RecipeItem;
+import fr.gymgod.common.entities.nutrition.UserLikedRecipe;
 import fr.gymgod.common.entities.user.UserAccount;
 import fr.gymgod.common.exception.ExternalProductSnapshotTooLargeException;
 import fr.gymgod.common.exception.RecipeNotFoundException;
@@ -18,6 +21,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -28,6 +32,8 @@ public class OrchestratorRecipe {
     private final RecipeDataPort recipeDataPort;
     private final RecipeTransform recipeTransform;
     private final UserAccountRepository userAccountRepository;
+    private final UserLikedRecipeRepository userLikedRecipeRepository;
+    private final RecipeRepository recipeRepository;
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     public List<RecipeRecord> getUserRecipes() {
@@ -66,7 +72,68 @@ public class OrchestratorRecipe {
             throw new RecipeNotFoundException(id);
         }
         String authorName = resolveDisplayName(recipe.getUserId());
-        return recipeTransform.fromRecipe(recipe, authorName);
+        UUID currentUserId = recipeDataPort.getCurrentUser().getId();
+        boolean liked = userLikedRecipeRepository.existsByUserIdAndRecipeId(currentUserId, id);
+        return recipeTransform.fromRecipe(recipe, authorName, liked);
+    }
+
+    /** Ajoute un j'aime sur une recette (idempotent). Impossible sur ses propres recettes. */
+    @Transactional
+    public void likeRecipe(UUID recipeId) {
+        UserAccount currentUser = recipeDataPort.getCurrentUser();
+        Recipe recipe = recipeDataPort.findRecipeById(recipeId)
+                .orElseThrow(() -> new RecipeNotFoundException(recipeId));
+        if (recipe.getUserId().equals(currentUser.getId())) {
+            throw new RuntimeException("Vous ne pouvez pas aimer votre propre recette.");
+        }
+        if (!userLikedRecipeRepository.existsByUserIdAndRecipeId(currentUser.getId(), recipeId)) {
+            UserLikedRecipe like = new UserLikedRecipe();
+            like.setUserId(currentUser.getId());
+            like.setRecipeId(recipeId);
+            userLikedRecipeRepository.save(like);
+        }
+    }
+
+    /** Retire le j'aime sur une recette pour l'utilisateur courant (idempotent). */
+    @Transactional
+    public void unlikeRecipe(UUID recipeId) {
+        UserAccount currentUser = recipeDataPort.getCurrentUser();
+        userLikedRecipeRepository.deleteByUserIdAndRecipeId(currentUser.getId(), recipeId);
+    }
+
+    /** Retourne toutes les recettes aimées par l'utilisateur courant, les plus récentes en premier. */
+    @Transactional(readOnly = true)
+    public List<RecipeRecord> getLikedRecipes() {
+        UserAccount currentUser = recipeDataPort.getCurrentUser();
+        List<UUID> recipeIds = userLikedRecipeRepository.findAllByUserId(currentUser.getId())
+                .stream().map(UserLikedRecipe::getRecipeId).collect(Collectors.toList());
+        if (recipeIds.isEmpty()) return List.of();
+
+        List<Recipe> recipes = recipeRepository.findAllById(recipeIds);
+        Map<UUID, String> authorNames = resolveDisplayNames(recipes);
+        return recipes.stream()
+                .map(r -> recipeTransform.fromRecipe(
+                        r,
+                        authorNames.getOrDefault(r.getUserId(), "Utilisateur"),
+                        true))
+                .collect(Collectors.toList());
+    }
+
+    /** Batch-résolution des noms d'affichage pour une liste de recettes. */
+    private Map<UUID, String> resolveDisplayNames(List<Recipe> recipes) {
+        List<UUID> userIds = recipes.stream().map(Recipe::getUserId).distinct().collect(Collectors.toList());
+        return userAccountRepository.findAllById(userIds).stream()
+                .collect(Collectors.toMap(
+                        fr.gymgod.common.entities.user.UserAccount::getId,
+                        u -> {
+                            String first = u.getFirstName();
+                            String last = u.getLastName();
+                            if (first != null && !first.isBlank()) {
+                                return last != null && !last.isBlank() ? first + " " + last : first;
+                            }
+                            return u.getUsername() != null ? u.getUsername() : "Utilisateur";
+                        }
+                ));
     }
 
     /** Résout le nom d'affichage d'un utilisateur à partir de son UUID. */

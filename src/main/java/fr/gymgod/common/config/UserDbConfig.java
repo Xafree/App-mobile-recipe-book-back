@@ -17,7 +17,8 @@ import javax.sql.DataSource;
 @Configuration
 @EnableTransactionManagement
 @EnableJpaRepositories(entityManagerFactoryRef = "userEntityManagerFactory", transactionManagerRef = "userTransactionManager", basePackages = {
-        "fr.gymgod.common.domain.user" })
+        "fr.gymgod.common.domain.user",
+        "fr.gymgod.common.domain.social" })
 public class UserDbConfig {
 
     @Bean(name = "userDataSource")
@@ -31,7 +32,9 @@ public class UserDbConfig {
             @Qualifier("userDataSource") DataSource dataSource) {
         LocalContainerEntityManagerFactoryBean em = new LocalContainerEntityManagerFactoryBean();
         em.setDataSource(dataSource);
-        em.setPackagesToScan("fr.gymgod.common.entities.user");
+        em.setPackagesToScan(
+                "fr.gymgod.common.entities.user",
+                "fr.gymgod.common.entities.social");
         em.setPersistenceUnitName("user");
         HibernateJpaVendorAdapter vendorAdapter = new HibernateJpaVendorAdapter();
         em.setJpaVendorAdapter(vendorAdapter);

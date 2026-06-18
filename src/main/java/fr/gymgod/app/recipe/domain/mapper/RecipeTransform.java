@@ -12,10 +12,14 @@ import java.util.stream.Collectors;
 public class RecipeTransform {
 
     public RecipeRecord fromRecipe(Recipe recipe) {
-        return fromRecipe(recipe, null);
+        return fromRecipe(recipe, null, false);
     }
 
     public RecipeRecord fromRecipe(Recipe recipe, String authorName) {
+        return fromRecipe(recipe, authorName, false);
+    }
+
+    public RecipeRecord fromRecipe(Recipe recipe, String authorName, boolean likedByCurrentUser) {
         if (recipe == null) return null;
         return new RecipeRecord(
                 recipe.getId(),
@@ -40,7 +44,8 @@ public class RecipeTransform {
                 recipe.getSteps(),
                 recipe.getCreatedAt(),
                 recipe.getUpdatedAt(),
-                authorName);
+                authorName,
+                likedByCurrentUser);
     }
 
     public RecipeItemRecord fromRecipeItem(RecipeItem item) {

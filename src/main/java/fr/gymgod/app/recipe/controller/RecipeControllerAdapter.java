@@ -38,6 +38,11 @@ public class RecipeControllerAdapter {
         return ResponseEntity.ok(orchestratorRecipe.getUserRecipes());
     }
 
+    @GetMapping("/liked")
+    public ResponseEntity<List<RecipeRecord>> getLikedRecipes() {
+        return ResponseEntity.ok(orchestratorRecipe.getLikedRecipes());
+    }
+
     @GetMapping("/favorites")
     public ResponseEntity<List<RecipeRecord>> getUserFavoriteRecipes() {
         return ResponseEntity.ok(orchestratorRecipe.getUserFavoriteRecipes());
@@ -61,6 +66,18 @@ public class RecipeControllerAdapter {
         } else {
             return ResponseEntity.notFound().build();
         }
+    }
+
+    @PostMapping("/{id}/like")
+    public ResponseEntity<Void> likeRecipe(@PathVariable UUID id) {
+        orchestratorRecipe.likeRecipe(id);
+        return ResponseEntity.noContent().build();
+    }
+
+    @DeleteMapping("/{id}/like")
+    public ResponseEntity<Void> unlikeRecipe(@PathVariable UUID id) {
+        orchestratorRecipe.unlikeRecipe(id);
+        return ResponseEntity.noContent().build();
     }
 
     @PostMapping

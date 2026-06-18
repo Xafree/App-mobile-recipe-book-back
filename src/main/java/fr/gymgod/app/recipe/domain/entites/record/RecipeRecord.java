@@ -26,5 +26,7 @@ public record RecipeRecord(
         Instant createdAt,
         Instant updatedAt,
         /** Nom d'affichage de l'auteur — null pour les recettes de l'utilisateur courant. */
-        String authorName
+        String authorName,
+        /** True si l'utilisateur courant a aimé cette recette. */
+        Boolean likedByCurrentUser
 ) {}
