@@ -73,6 +73,10 @@ public class SecurityConfig {
                 .requestMatchers(LOGIN_URL, "/api/auth/**", "/api/user",
                     "/nutrition/meals/**").permitAll()
                 .requestMatchers("/api/admin/**").hasRole("ADMIN")
+                // ── Social (follow + messagerie) — authentifié ────────────────────────
+                .requestMatchers("/api/v1/social/**").authenticated()
+                // ── Flux SSE notifications temps réel — authentifié ───────────────────
+                .requestMatchers("/api/v1/stream").authenticated()
                 .anyRequest().permitAll()
             )
             .formLogin(form -> form
