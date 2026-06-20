@@ -9,6 +9,8 @@ import org.springframework.stereotype.Service;
 
 import java.io.BufferedReader;
 import java.io.FileReader;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -25,6 +27,8 @@ public class OrchestratorProductEtlService {
 
     private final EtlFileService etlFileService;
     private final EtlBatchProcessor etlBatchProcessor;
+    private final EtlSchemaValidator schemaValidator;
+    private final EtlStatusHolder statusHolder;
     private final ReferenceDataPort referenceDataPort;
     private final ProductDataPort productDataPort;
 
@@ -32,86 +36,129 @@ public class OrchestratorProductEtlService {
     private static final int THREAD_POOL_SIZE = 4;
 
     public void loadData(String filePath) {
+        // ── Étape 1 : vérification / téléchargement du fichier ──────────────────
         String version = etlFileService.ensureFileAvailableAndGetVersion(filePath);
 
         String finalFilePath = (filePath == null || filePath.isEmpty() || filePath.equals("auto"))
                 ? etlFileService.getEtlFilePath()
                 : filePath;
 
-        final String importVersion = version;
+        logFileInfo(finalFilePath);
 
+        // ── Étape 2 : initialisation ─────────────────────────────────────────────
+        final String importVersion = version;
         long startTime = System.currentTimeMillis();
-        AtomicInteger count = new AtomicInteger(0);
-        List<String> batchLines = new ArrayList<>(BATCH_SIZE);
+
+        AtomicInteger totalLines   = new AtomicInteger(0);
+        AtomicInteger totalCreated = new AtomicInteger(0);
+        AtomicInteger totalUpdated = new AtomicInteger(0);
+        AtomicInteger totalSkipped = new AtomicInteger(0);
         AtomicReference<Product> lastProductRef = new AtomicReference<>();
 
+        List<String> batchLines = new ArrayList<>(BATCH_SIZE);
+
         ExecutorService executor = Executors.newFixedThreadPool(THREAD_POOL_SIZE);
-        // Semaphore to limit the number of pending tasks and avoid OOM
         Semaphore semaphore = new Semaphore(THREAD_POOL_SIZE * 2);
 
-        log.info("Starting ETL for file: {}", finalFilePath);
+        log.info("═══ ETL démarré — fichier : {} | version : {} ═══", finalFilePath, importVersion);
 
+        // ── Étape 3 : lecture ligne par ligne ────────────────────────────────────
         try (BufferedReader br = new BufferedReader(new FileReader(finalFilePath))) {
-            String line;
-            br.readLine(); // Skip header
+            String header = br.readLine();
+            if (header == null || !schemaValidator.validate(header)) {
+                log.error("═══ ETL annulé : le format du fichier ne correspond pas à celui attendu par ProductMapper ═══");
+                statusHolder.record(EtlRunStats.failure(finalFilePath, "Format du fichier invalide ou non conforme au schéma attendu"));
+                return;
+            }
 
+            String line;
             while ((line = br.readLine()) != null) {
                 batchLines.add(line);
 
                 if (batchLines.size() >= BATCH_SIZE) {
-                    List<String> currentBatch = new ArrayList<>(batchLines);
-                    batchLines.clear();
-
-                    semaphore.acquire(); // Blocks if too many tasks are in progress
-
-                    CompletableFuture
-                            .supplyAsync(() -> etlBatchProcessor.processBatch(currentBatch, importVersion), executor)
-                            .thenAccept(p -> {
-                                if (p != null)
-                                    lastProductRef.set(p);
-                                int currentCount = count.addAndGet(currentBatch.size());
-                                if (currentCount % 10000 == 0) {
-                                    log.info("Processed products: {}", currentCount);
-                                }
-                                semaphore.release();
-                            }).exceptionally(e -> {
-                                log.error("Batch processing error", e);
-                                semaphore.release();
-                                return null;
-                            });
+                    submitBatch(batchLines, importVersion, executor, semaphore,
+                            totalLines, totalCreated, totalUpdated, totalSkipped, lastProductRef);
+                    batchLines = new ArrayList<>(BATCH_SIZE);
                 }
             }
 
+            // Dernier batch partiel
             if (!batchLines.isEmpty()) {
-                List<String> currentBatch = new ArrayList<>(batchLines);
-                semaphore.acquire();
-                CompletableFuture
-                        .supplyAsync(() -> etlBatchProcessor.processBatch(currentBatch, importVersion), executor)
-                        .thenAccept(p -> {
-                            if (p != null)
-                                lastProductRef.set(p);
-                            count.addAndGet(currentBatch.size());
-                            semaphore.release();
-                        }).exceptionally(e -> {
-                            log.error("Final batch processing error", e);
-                            semaphore.release();
-                            return null;
-                        });
+                submitBatch(batchLines, importVersion, executor, semaphore,
+                        totalLines, totalCreated, totalUpdated, totalSkipped, lastProductRef);
             }
 
-            // Wait for all processing to finish by acquiring all permits
+            // Attente de fin de tous les batches
             semaphore.acquire(THREAD_POOL_SIZE * 2);
 
         } catch (Exception e) {
-            log.error("Critical read error", e);
+            log.error("Erreur critique lors de la lecture du fichier ETL", e);
+            statusHolder.record(EtlRunStats.failure(finalFilePath, e.getMessage()));
             return;
         } finally {
             executor.shutdown();
         }
 
-        long endTime = System.currentTimeMillis();
+        // ── Étape 4 : récapitulatif final ────────────────────────────────────────
+        long elapsedS = (System.currentTimeMillis() - startTime) / 1000;
+        log.info("═══ ETL terminé en {} s ═══", elapsedS);
+        log.info("  Lignes lues     : {}", totalLines.get());
+        log.info("  Créés           : {}", totalCreated.get());
+        log.info("  Mis à jour      : {}", totalUpdated.get());
+        log.info("  Ignorés (à jour): {}", totalSkipped.get());
+        log.info("  Pays manquants  : {}", referenceDataPort.getCountryMissing());
 
-        log.info("Execution time: {} ms", (endTime - startTime));
-        log.info("Missing countries: {}", this.referenceDataPort.getCountryMissing());
+        statusHolder.record(EtlRunStats.success(finalFilePath, importVersion, elapsedS,
+                totalLines.get(), totalCreated.get(), totalUpdated.get(), totalSkipped.get()));
+    }
+
+    private void submitBatch(List<String> batch,
+                             String version,
+                             ExecutorService executor,
+                             Semaphore semaphore,
+                             AtomicInteger totalLines,
+                             AtomicInteger totalCreated,
+                             AtomicInteger totalUpdated,
+                             AtomicInteger totalSkipped,
+                             AtomicReference<Product> lastProductRef) throws InterruptedException {
+
+        semaphore.acquire();
+        final List<String> currentBatch = batch;
+
+        CompletableFuture
+                .supplyAsync(() -> etlBatchProcessor.processBatch(currentBatch, version), executor)
+                .thenAccept(result -> {
+                    if (result.lastProduct() != null) {
+                        lastProductRef.set(result.lastProduct());
+                    }
+
+                    totalCreated.addAndGet(result.created());
+                    totalUpdated.addAndGet(result.updated());
+                    totalSkipped.addAndGet(result.skipped());
+
+                    int processed = totalLines.addAndGet(currentBatch.size());
+                    if (processed % 10_000 == 0) {
+                        log.info("[Progression] {} lignes traitées — {} créés | {} mis à jour | {} ignorés",
+                                processed, totalCreated.get(), totalUpdated.get(), totalSkipped.get());
+                    }
+
+                    semaphore.release();
+                })
+                .exceptionally(e -> {
+                    log.error("Erreur lors du traitement d'un batch", e);
+                    semaphore.release();
+                    return null;
+                });
+    }
+
+    private void logFileInfo(String filePath) {
+        try {
+            long sizeBytes = Files.size(Paths.get(filePath));
+            double sizeMb = sizeBytes / (1024.0 * 1024.0);
+            log.info("[Fichier] {} — taille : {}", filePath,
+                    sizeMb >= 1024 ? String.format("%.1f Go", sizeMb / 1024) : String.format("%.1f Mo", sizeMb));
+        } catch (Exception e) {
+            log.warn("[Fichier] Impossible de lire la taille de {}", filePath);
+        }
     }
 }

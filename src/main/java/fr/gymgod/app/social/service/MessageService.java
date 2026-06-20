@@ -7,6 +7,7 @@ import fr.gymgod.common.domain.social.DirectMessageRepository;
 import fr.gymgod.common.domain.social.UserFollowRepository;
 import fr.gymgod.common.domain.user.UserAccountRepository;
 import fr.gymgod.common.entities.social.DirectMessage;
+import fr.gymgod.common.entities.social.MessageType;
 import fr.gymgod.common.entities.user.UserAccount;
 import fr.gymgod.common.service.SessionSpringService;
 import lombok.RequiredArgsConstructor;
@@ -31,9 +32,13 @@ public class MessageService {
     private final SseEmitterRegistry sseRegistry;
 
     @Transactional(transactionManager = "userTransactionManager")
-    public MessageRecord sendMessage(UUID receiverId, String content) {
+    public MessageRecord sendMessage(UUID receiverId, String content, String messageType, Map<String, Object> metadata) {
         if (content == null || content.isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Content cannot be empty");
+        }
+        MessageType type = parseType(messageType);
+        if (type == MessageType.RECIPE && (metadata == null || metadata.get("recipeId") == null)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "RECIPE message requires metadata.recipeId");
         }
         UUID senderId = currentUserId();
         // Vérification du follow mutuel
@@ -47,6 +52,8 @@ public class MessageService {
         msg.setSenderId(senderId);
         msg.setReceiverId(receiverId);
         msg.setContent(content.strip());
+        msg.setMessageType(type);
+        msg.setMetadata(metadata);
         // @CreationTimestamp est posé au flush, pas au save() — initialiser manuellement
         // pour que sentAt soit non-null dans le MessageRecord retourné dans la même transaction.
         msg.setSentAt(Instant.now());
@@ -118,5 +125,15 @@ public class MessageService {
 
     private UUID currentUserId() {
         return UUID.fromString(sessionSpringService.getCurrentUserId());
+    }
+
+    /** TEXT par défaut si non précisé ; rejette toute valeur inconnue. */
+    private MessageType parseType(String raw) {
+        if (raw == null || raw.isBlank()) return MessageType.TEXT;
+        try {
+            return MessageType.valueOf(raw.strip().toUpperCase());
+        } catch (IllegalArgumentException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unknown messageType: " + raw);
+        }
     }
 }

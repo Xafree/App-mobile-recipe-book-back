@@ -6,6 +6,7 @@ import fr.gymgod.app.recipe.domain.entites.record.RecipeItemCreateRecord;
 import fr.gymgod.app.recipe.domain.entites.record.RecipeRecord;
 import fr.gymgod.app.recipe.domain.mapper.RecipeTransform;
 import fr.gymgod.app.recipe.domain.port.RecipeDataPort;
+import fr.gymgod.app.social.service.FollowService;
 import fr.gymgod.common.constants.RecipeConstants;
 import fr.gymgod.common.domain.nutrition.RecipeRepository;
 import fr.gymgod.common.domain.nutrition.UserLikedRecipeRepository;
@@ -15,6 +16,7 @@ import fr.gymgod.common.entities.nutrition.RecipeItem;
 import fr.gymgod.common.entities.nutrition.UserLikedRecipe;
 import fr.gymgod.common.entities.user.UserAccount;
 import fr.gymgod.common.exception.ExternalProductSnapshotTooLargeException;
+import fr.gymgod.common.exception.RecipeAccessDeniedException;
 import fr.gymgod.common.exception.RecipeNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -34,6 +36,7 @@ public class OrchestratorRecipe {
     private final UserAccountRepository userAccountRepository;
     private final UserLikedRecipeRepository userLikedRecipeRepository;
     private final RecipeRepository recipeRepository;
+    private final FollowService followService;
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     public List<RecipeRecord> getUserRecipes() {
@@ -50,14 +53,34 @@ public class OrchestratorRecipe {
                 .collect(Collectors.toList());
     }
 
+    /**
+     * Retourne le détail complet d'une recette pour l'utilisateur courant :
+     * accessible au propriétaire, et aux amis (suivi mutuel) du propriétaire
+     * si la recette est privée. Les recettes publiques sont normalement
+     * récupérées via {@link #getPublicRecipe(UUID)} par les autres
+     * utilisateurs, mais l'accès reste autorisé ici aussi par cohérence.
+     */
     public RecipeRecord getRecipe(UUID id) {
         UserAccount currentUser = recipeDataPort.getCurrentUser();
         Recipe recipe = recipeDataPort.findRecipeById(id)
                 .orElseThrow(() -> new RecipeNotFoundException(id));
-        if (!recipe.getUserId().equals(currentUser.getId())) {
-            throw new RuntimeException("Accès refusé : cette recette ne vous appartient pas.");
+        if (!canView(recipe, currentUser.getId())) {
+            throw new RecipeAccessDeniedException(id);
         }
-        return recipeTransform.fromRecipe(recipe);
+        // Recette d'un ami (suivi mutuel) consultée directement : afficher
+        // l'auteur + bouton Suivre, comme pour une recette publique.
+        if (recipe.getUserId().equals(currentUser.getId())) {
+            return recipeTransform.fromRecipe(recipe);
+        }
+        return recipeTransform.fromRecipe(recipe, resolveDisplayName(recipe.getUserId()));
+    }
+
+    /** Propriétaire, recette publique, ou ami mutuel (suivi réciproque) du propriétaire. */
+    private boolean canView(Recipe recipe, UUID viewerId) {
+        if (recipe.getUserId().equals(viewerId) || Boolean.TRUE.equals(recipe.getIsPublic())) {
+            return true;
+        }
+        return followService.getState(recipe.getUserId()).isMutual();
     }
 
     /**

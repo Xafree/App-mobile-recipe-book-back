@@ -3,8 +3,11 @@ package fr.gymgod.common.entities.social;
 import jakarta.persistence.*;
 import lombok.Data;
 import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.time.Instant;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -28,6 +31,15 @@ public class DirectMessage {
 
     @Column(nullable = false, length = 2000)
     private String content;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "message_type", nullable = false, length = 20)
+    private MessageType messageType = MessageType.TEXT;
+
+    /** Charge utile structurée du message (ex. {recipeId, recipeName, imageUrl} pour MessageType.RECIPE). */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(columnDefinition = "jsonb")
+    private Map<String, Object> metadata;
 
     @CreationTimestamp
     @Column(name = "sent_at", updatable = false)

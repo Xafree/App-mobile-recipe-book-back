@@ -29,7 +29,7 @@ public class MessageControllerAdapter {
             @PathVariable UUID receiverId,
             @RequestBody SendMessageRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED)
-            .body(messageService.sendMessage(receiverId, request.content()));
+            .body(messageService.sendMessage(receiverId, request.content(), request.messageType(), request.metadata()));
     }
 
     /** Messages d'une conversation (les plus récents en premier). Marque les reçus comme lus. */

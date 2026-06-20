@@ -1,5 +1,6 @@
 package fr.gymgod.app.nutrition.service;
 
+import fr.gymgod.app.nutrition.domain.BarcodeNormalizer;
 import fr.gymgod.app.nutrition.domain.port.NutritionDataPort;
 import fr.gymgod.app.nutrition.domain.entites.record.OcrNutritionRecord;
 import fr.gymgod.app.nutrition.domain.entites.record.ProductRecord;
@@ -35,17 +36,31 @@ public class OrchestratorNutrition {
     private final OcrNutritionTransform ocrNutritionTransform;
 
     public ProductRecord getProduct(String key) {
-        Product product = this.nutritionDataPort.getProduct(key);
-        if (product == null) {
-            // Code-barres absent de la base locale — cas typique d'un scan en
-            // magasin d'un produit jamais importé par l'ETL : on tente une
-            // récupération en direct sur OpenFoodFacts et on l'enregistre pour
-            // les prochains scans.
-            product = this.offProductImportService.importProduct(key);
-        } else {
-            product = this.nutritionEnrichmentService.enrichIfNeeded(product);
+        List<String> candidates = BarcodeNormalizer.candidates(key);
+
+        // 1. Recherche en base locale, en essayant le code tel que fourni
+        // puis ses variantes normalisées (zéro UPC-A manquant, chiffre de
+        // contrôle EAN-13 omis...).
+        for (String candidate : candidates) {
+            Product product = this.nutritionDataPort.getProduct(candidate);
+            if (product != null) {
+                product = this.nutritionEnrichmentService.enrichIfNeeded(product);
+                return this.productTransform.fromProduct(product);
+            }
         }
-        return this.productTransform.fromProduct(product);
+
+        // 2. Absent de la base locale sous toutes ses formes — cas typique
+        // d'un scan en magasin d'un produit jamais importé par l'ETL : on
+        // tente une récupération en direct sur OpenFoodFacts et on
+        // l'enregistre pour les prochains scans.
+        for (String candidate : candidates) {
+            Product product = this.offProductImportService.importProduct(candidate);
+            if (product != null) {
+                return this.productTransform.fromProduct(product);
+            }
+        }
+
+        return this.productTransform.fromProduct(null);
     }
 
     /**

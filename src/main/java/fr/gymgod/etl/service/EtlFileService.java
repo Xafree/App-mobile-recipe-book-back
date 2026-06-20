@@ -11,7 +11,6 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.attribute.FileTime;
 import java.time.Instant;
-import java.time.temporal.ChronoUnit;
 
 @Service
 @RequiredArgsConstructor
@@ -38,12 +37,17 @@ public class EtlFileService {
             try {
                 Path path = Paths.get(etlFile);
                 if (Files.exists(path)) {
-                    FileTime lastModifiedTime = Files.getLastModifiedTime(path);
-                    Instant lastModified = lastModifiedTime.toInstant();
-                    Instant oneWeekAgo = Instant.now().minus(7, ChronoUnit.DAYS);
-
-                    if (lastModified.isAfter(oneWeekAgo)) {
-                        log.info("Recent local file (less than 7 days). Download ignored.");
+                    if (!isValidCsvFile(path)) {
+                        log.warn("[Fichier] Fichier local invalide (ne commence pas par 'code\\t') — re-téléchargement forcé");
+                    } else {
+                        FileTime lastModifiedTime = Files.getLastModifiedTime(path);
+                        Instant lastModified = lastModifiedTime.toInstant();
+                        long sizeBytes = Files.size(path);
+                        double sizeMb = sizeBytes / (1024.0 * 1024.0);
+                        log.info("[Fichier] Fichier local valide, téléchargement ignoré — {} ({}) — version {}",
+                                etlFile,
+                                sizeMb >= 1024 ? String.format("%.1f Go", sizeMb / 1024) : String.format("%.1f Mo", sizeMb),
+                                lastModified);
                         needDownload = false;
                         version = lastModified.toString();
                     }
@@ -55,11 +59,32 @@ public class EtlFileService {
             if (needDownload) {
                 log.info("Automatic download from {}", etlUrl);
                 version = fileDownloaderPort.downloadFile(etlUrl, etlFile);
-                if (version == null)
+                if (version == null) {
                     version = String.valueOf(System.currentTimeMillis());
+                } else {
+                    Path downloaded = Paths.get(etlFile);
+                    if (!isValidCsvFile(downloaded)) {
+                        log.error("[Fichier] Le fichier téléchargé n'est pas un CSV OFF valide — " +
+                                "le serveur OFF a peut-être renvoyé une erreur HTTP (rate-limit ?). " +
+                                "Vérifiez le contenu de {} et téléchargez manuellement si besoin : https://world.openfoodfacts.org/data",
+                                etlFile);
+                    }
+                }
             }
             log.info("File version detected: {}", version);
         }
         return version;
+    }
+
+    /// Vérifie que le fichier commence bien par l'en-tête TSV OFF ("code\t").
+    /// Permet de détecter les pages d'erreur HTML/texte renvoyées à la place du dump.
+    private boolean isValidCsvFile(Path path) {
+        try (java.io.BufferedReader reader = Files.newBufferedReader(path)) {
+            String firstLine = reader.readLine();
+            return firstLine != null && firstLine.startsWith("code\t");
+        } catch (Exception e) {
+            log.warn("[Fichier] Impossible de lire l'en-tête de {}", path);
+            return false;
+        }
     }
 }

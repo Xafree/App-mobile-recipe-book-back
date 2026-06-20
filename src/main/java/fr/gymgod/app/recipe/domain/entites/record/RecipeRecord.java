@@ -25,6 +25,8 @@ public record RecipeRecord(
         List<Map<String, Object>> steps,
         Instant createdAt,
         Instant updatedAt,
+        /** UUID de l'auteur — null pour les recettes de l'utilisateur courant (cache le bouton Suivre côté client). */
+        UUID authorId,
         /** Nom d'affichage de l'auteur — null pour les recettes de l'utilisateur courant. */
         String authorName,
         /** True si l'utilisateur courant a aimé cette recette. */
