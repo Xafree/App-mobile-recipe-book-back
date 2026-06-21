@@ -15,9 +15,7 @@ public record UserDto(
         Integer calorieGoal,
         Boolean notificationsEnabled,
         String language,
-        String provider,
-        /** Email vérifié — le client bloque l'accès à l'app tant que false (cf. écran de vérification). */
-        boolean emailVerified
+        String provider
 ) {
     public static UserDto from(UserAccount user) {
         return new UserDto(
@@ -31,8 +29,7 @@ public record UserDto(
                 user.getCalorieGoal(),
                 user.getNotificationsEnabled(),
                 user.getLanguage(),
-                user.getProvider() != null ? user.getProvider().name().toLowerCase() : "email",
-                user.isEmailVerified()
+                user.getProvider() != null ? user.getProvider().name().toLowerCase() : "email"
         );
     }
 }
