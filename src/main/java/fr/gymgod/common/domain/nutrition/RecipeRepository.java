@@ -20,9 +20,6 @@ public interface RecipeRepository extends JpaRepository<Recipe, UUID> {
     /** Toutes les recettes publiques d'un utilisateur, pour son profil public. */
     List<Recipe> findByUserIdAndIsPublicTrueOrderByCreatedAtDesc(UUID userId);
 
-    /** Nombre de recettes privées d'un utilisateur — affiché uniquement à ses amis (suivi mutuel). */
-    long countByUserIdAndIsPublicFalse(UUID userId);
-
     // ── Feed public — pagination par curseur (keyset) ──────────────────────────
 
     /** Première page du fil public, sans curseur. */

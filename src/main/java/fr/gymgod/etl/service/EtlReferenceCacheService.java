@@ -1,9 +1,8 @@
 package fr.gymgod.etl.service;
 
-import com.github.benmanes.caffeine.cache.Cache;
-import com.github.benmanes.caffeine.cache.Caffeine;
 import fr.gymgod.common.entities.nutrition.Country;
 import fr.gymgod.common.entities.nutrition.*;
+import fr.gymgod.common.entities.user.UserAccount;
 import fr.gymgod.etl.domain.port.ReferenceDataPort;
 import fr.gymgod.etl.domain.service.EtlDataParser;
 import lombok.RequiredArgsConstructor;
@@ -11,47 +10,31 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 
-/**
- * Caches de résolution des entités de référence (marques, catégories, pays,
- * labels, ingrédients, traces) pendant l'import ETL produits.
- *
- * <p>Bornés à {@link #MAX_CACHE_ENTRIES} entrées chacun (LRU via Caffeine) :
- * sur le dump OpenFoodFacts complet, les ingrédients/labels en texte libre
- * génèrent des centaines de milliers de clés uniques — un cache illimité
- * (ancien {@code ConcurrentHashMap}, jamais vidé sur la durée de vie du bean
- * singleton) finissait par épuiser le tas JVM (OutOfMemoryError observé en
- * cours d'import).</p>
- */
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class EtlReferenceCacheService {
 
-    private static final int MAX_CACHE_ENTRIES = 50_000;
-
     private final ReferenceDataPort referenceDataPort;
 
-    // Caches globaux (clé texte -> entité), bornés LRU.
-    private final Cache<String, Brand> globalBrandCache = boundedCache();
-    private final Cache<String, Categorie> globalCategorieCache = boundedCache();
-    private final Cache<String, Country> globalCountryCache = boundedCache();
-    private final Cache<String, Label> globalLabelCache = boundedCache();
-    private final Cache<String, Ingredient> globalIngredientCache = boundedCache();
-    private final Cache<String, Trace> globalTraceCache = boundedCache();
+    // Global Caches
+    private final Map<String, Brand> globalBrandCache = new ConcurrentHashMap<>();
+    private final Map<String, Categorie> globalCategorieCache = new ConcurrentHashMap<>();
+    private final Map<String, Country> globalCountryCache = new ConcurrentHashMap<>();
+    private final Map<String, Label> globalLabelCache = new ConcurrentHashMap<>();
+    private final Map<String, Ingredient> globalIngredientCache = new ConcurrentHashMap<>();
+    private final Map<String, Trace> globalTraceCache = new ConcurrentHashMap<>();
 
-    // Caches canoniques (ID -> entité), bornés LRU.
-    private final Cache<UUID, Brand> brandCanonicalCache = boundedCache();
-    private final Cache<UUID, Categorie> categorieCanonicalCache = boundedCache();
-    private final Cache<UUID, Country> countryCanonicalCache = boundedCache();
-    private final Cache<UUID, Label> labelCanonicalCache = boundedCache();
-    private final Cache<UUID, Ingredient> ingredientCanonicalCache = boundedCache();
-    private final Cache<UUID, Trace> traceCanonicalCache = boundedCache();
-
-    private static <K, V> Cache<K, V> boundedCache() {
-        return Caffeine.newBuilder().maximumSize(MAX_CACHE_ENTRIES).build();
-    }
+    // Canonical Caches (ID -> Entity)
+    private final Map<java.util.UUID, Brand> brandCanonicalCache = new ConcurrentHashMap<>();
+    private final Map<java.util.UUID, Categorie> categorieCanonicalCache = new ConcurrentHashMap<>();
+    private final Map<java.util.UUID, Country> countryCanonicalCache = new ConcurrentHashMap<>();
+    private final Map<java.util.UUID, Label> labelCanonicalCache = new ConcurrentHashMap<>();
+    private final Map<java.util.UUID, Ingredient> ingredientCanonicalCache = new ConcurrentHashMap<>();
+    private final Map<java.util.UUID, Trace> traceCanonicalCache = new ConcurrentHashMap<>();
 
     public Map<String, Brand> resolveBrands(List<String[]> batchColumns) {
         return resolveWithCache(batchColumns, 18, globalBrandCache, brandCanonicalCache,
@@ -87,11 +70,11 @@ public class EtlReferenceCacheService {
     }
 
     private <T> Map<String, T> resolveWithCache(List<String[]> batchColumns, int index,
-            Cache<String, T> globalCache,
-            Cache<UUID, T> canonicalCache,
+            Map<String, T> globalCache,
+            Map<java.util.UUID, T> canonicalCache,
             Function<Set<String>, Map<String, T>> resolver,
             Function<String, List<String>> keyExtractor,
-            Function<T, UUID> idExtractor) {
+            Function<T, java.util.UUID> idExtractor) {
         Map<String, T> result = new HashMap<>();
         Set<String> requiredKeys = new HashSet<>();
         boolean allInCache = true;
@@ -104,7 +87,7 @@ public class EtlReferenceCacheService {
                     String trimmedKey = key.trim();
                     if (!trimmedKey.isEmpty()) {
                         requiredKeys.add(trimmedKey);
-                        if (globalCache.getIfPresent(trimmedKey) == null) {
+                        if (!globalCache.containsKey(trimmedKey)) {
                             allInCache = false;
                         }
                     }
@@ -114,7 +97,7 @@ public class EtlReferenceCacheService {
 
         if (allInCache) {
             for (String key : requiredKeys) {
-                T item = globalCache.getIfPresent(key);
+                T item = globalCache.get(key);
                 if (item != null) {
                     result.put(key, item);
                 }
@@ -130,17 +113,16 @@ public class EtlReferenceCacheService {
                 T entity = entry.getValue();
 
                 if (entity != null) {
-                    UUID id = idExtractor.apply(entity);
-                    T canonical = canonicalCache.get(id, k -> entity);
+                    java.util.UUID id = idExtractor.apply(entity);
+                    T canonical = canonicalCache.computeIfAbsent(id, k -> entity);
                     globalCache.put(key, canonical);
                     result.put(key, canonical);
                 }
             }
 
             for (String key : requiredKeys) {
-                T cached = globalCache.getIfPresent(key);
-                if (cached != null) {
-                    result.put(key, cached);
+                if (globalCache.containsKey(key)) {
+                    result.put(key, globalCache.get(key));
                 }
             }
         }

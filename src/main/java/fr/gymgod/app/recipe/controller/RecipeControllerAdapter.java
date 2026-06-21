@@ -3,16 +3,13 @@ package fr.gymgod.app.recipe.controller;
 import fr.gymgod.app.recipe.domain.entites.record.RecipeCreateRecord;
 import fr.gymgod.app.recipe.domain.entites.record.RecipeRecord;
 import fr.gymgod.app.recipe.service.OrchestratorRecipe;
-import fr.gymgod.common.image.ImageContentTypes;
-import fr.gymgod.common.image.ImageResizer;
-import fr.gymgod.common.image.ProcessedImage;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.UrlResource;
-import org.springframework.http.CacheControl;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -22,7 +19,6 @@ import java.net.MalformedURLException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -32,11 +28,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class RecipeControllerAdapter {
 
-    /** Côté le plus long autorisé pour une photo de recette — confortable pour un affichage plein écran. */
-    private static final int MAX_RECIPE_IMAGE_DIMENSION = 1600;
-
     private final OrchestratorRecipe orchestratorRecipe;
-    private final ImageResizer imageResizer;
 
     @Value("${path.image}")
     private String imageFolder;
@@ -122,13 +114,15 @@ public class RecipeControllerAdapter {
         if (file.isEmpty()) {
             return ResponseEntity.badRequest().body(Map.of("error", "Fichier vide"));
         }
-        ProcessedImage processed = imageResizer.resize(
-                file.getInputStream(), file.getOriginalFilename(), MAX_RECIPE_IMAGE_DIMENSION);
-        String filename = UUID.randomUUID() + "." + processed.extension();
+        String original = file.getOriginalFilename();
+        String ext = (original != null && original.contains("."))
+                ? original.substring(original.lastIndexOf('.'))
+                : ".jpg";
+        String filename = UUID.randomUUID() + ext;
 
         Path dir = Paths.get(imageFolder, "recipes");
         Files.createDirectories(dir);
-        Files.write(dir.resolve(filename), processed.bytes());
+        Files.write(dir.resolve(filename), file.getBytes());
 
         return ResponseEntity.ok(Map.of("url", "/api/v1/recipes/image/" + filename));
     }
@@ -144,8 +138,7 @@ public class RecipeControllerAdapter {
             Resource resource = new UrlResource(file.toUri());
             if (resource.exists() && resource.isReadable()) {
                 return ResponseEntity.ok()
-                        .contentType(ImageContentTypes.resolve(filename))
-                        .cacheControl(CacheControl.maxAge(Duration.ofDays(30)).cachePublic())
+                        .contentType(MediaType.APPLICATION_OCTET_STREAM)
                         .body(resource);
             }
             return ResponseEntity.notFound().build();

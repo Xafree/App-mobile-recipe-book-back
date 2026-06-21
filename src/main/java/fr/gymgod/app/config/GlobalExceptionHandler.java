@@ -4,7 +4,6 @@ import fr.gymgod.common.exception.EmailAlreadyUsedException;
 import fr.gymgod.common.exception.ExternalProductSnapshotTooLargeException;
 import fr.gymgod.common.exception.InvalidCredentialsException;
 import fr.gymgod.common.exception.InvalidTokenException;
-import fr.gymgod.common.exception.RecipeAccessDeniedException;
 import fr.gymgod.common.exception.RecipeNotFoundException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -41,11 +40,6 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(RecipeNotFoundException.class)
     public ResponseEntity<Map<String, String>> handleRecipeNotFound(RecipeNotFoundException ex) {
         return error(HttpStatus.NOT_FOUND, "recipe_not_found", "Recipe not found.");
-    }
-
-    @ExceptionHandler(RecipeAccessDeniedException.class)
-    public ResponseEntity<Map<String, String>> handleRecipeAccessDenied(RecipeAccessDeniedException ex) {
-        return error(HttpStatus.FORBIDDEN, "forbidden", "You do not have permission to access this recipe.");
     }
 
     @ExceptionHandler(ExternalProductSnapshotTooLargeException.class)

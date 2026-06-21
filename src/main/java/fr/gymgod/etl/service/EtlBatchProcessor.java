@@ -2,6 +2,7 @@ package fr.gymgod.etl.service;
 
 import fr.gymgod.common.entities.nutrition.Country;
 import fr.gymgod.common.entities.nutrition.*;
+import fr.gymgod.common.entities.user.UserAccount;
 import fr.gymgod.etl.domain.service.EtlDataParser;
 import fr.gymgod.etl.domain.port.ProductDataPort;
 import fr.gymgod.etl.controller.event.ProductImageEvent;
@@ -31,15 +32,14 @@ public class EtlBatchProcessor {
     private boolean aiEnabled;
 
     @Transactional
-    public BatchResult processBatch(List<String> lines, String version) {
+    public Product processBatch(List<String> lines, String version) {
         List<String[]> batchColumns = new ArrayList<>(lines.size());
         List<String> codes = new ArrayList<>();
 
         for (String line : lines) {
             String[] columns = line.split("\t", -1);
-            if (columns.length < 1) {
+            if (columns.length < 1)
                 continue;
-            }
 
             String code = EtlDataParser.getValue(columns, 0);
             if (code == null || code.length() > 50) {
@@ -50,7 +50,7 @@ public class EtlBatchProcessor {
             codes.add(code);
         }
 
-        // 1. Chargement des produits existants
+        // 1. Load existing products
         Map<String, Product> existingMap = new HashMap<>();
         if (!codes.isEmpty()) {
             List<Product> existingProducts = productDataPort.getAllByCode(codes);
@@ -59,7 +59,7 @@ public class EtlBatchProcessor {
             }
         }
 
-        // 2. Résolution des références (cache global et canonique)
+        // 2. Reference resolution (Global and Canonical Cache)
         Map<String, Brand> brandCache = cacheService.resolveBrands(batchColumns);
         Map<String, Categorie> categorieCache = cacheService.resolveCategories(batchColumns);
         Map<String, Country> countryCache = cacheService.resolveCountries(batchColumns);
@@ -69,7 +69,6 @@ public class EtlBatchProcessor {
 
         List<Product> productsToSave = new ArrayList<>();
         Product lastProduct = null;
-        int created = 0, updated = 0, skipped = 0;
 
         for (String[] columns : batchColumns) {
             try {
@@ -79,24 +78,18 @@ public class EtlBatchProcessor {
                 String createdTimeInput = EtlDataParser.getValue(columns, 3);
                 String lastModifiedTimeInput = EtlDataParser.getValue(columns, 5);
 
-                // RESUME LOGIC : vérification timestamp + statut AI
+                // RESUME LOGIC: Check timestamp AND AI status
                 boolean isUpToDate = existing != null &&
                         isSame(existing.getCreatedTime(), createdTimeInput) &&
                         isSame(existing.getLastModifiedTime(), lastModifiedTimeInput);
 
+                // If AI is enabled, we also require the product to be AI enriched
                 if (isUpToDate && aiEnabled && existing != null && !existing.isAiEnriched()) {
-                    isUpToDate = false;
+                    isUpToDate = false; // Force update to run AI
                 }
 
                 if (isUpToDate) {
-                    skipped++;
                     continue;
-                }
-
-                if (existing == null) {
-                    created++;
-                } else {
-                    updated++;
                 }
 
                 Product p = productMapper.mapToProduct(columns, existing, brandCache, categorieCache, countryCache,
@@ -105,37 +98,35 @@ public class EtlBatchProcessor {
                 productsToSave.add(p);
                 lastProduct = p;
             } catch (Exception e) {
-                log.error("Erreur lors du traitement d'une ligne TSV", e);
+                log.error("Error processing line for TSV code", e);
             }
         }
 
         if (!productsToSave.isEmpty()) {
-            log.info("[Batch] {} créés | {} mis à jour | {} ignorés (à jour) | {} lignes dans le batch",
-                    created, updated, skipped, lines.size());
+            log.info("Batch summary: {} products processed to create/update out of {} total lines.",
+                    productsToSave.size(), lines.size());
             List<Product> savedProducts = this.productDataPort.saveAll(productsToSave);
-            log.info("[DB] {} produits sauvegardés en base", savedProducts.size());
 
+            // Trigger Async Image Download
             int imagesTriggered = 0;
             for (Product p : savedProducts) {
                 if (p.getImage() != null) {
-                    eventPublisher.publishEvent(new ProductImageEvent(this, p.getCode(), p.getImage()));
+                    eventPublisher
+                            .publishEvent(new ProductImageEvent(this, p.getCode(),
+                                    p.getImage()));
                     imagesTriggered++;
                 }
             }
-            if (imagesTriggered > 0) {
-                log.info("[Images] {} événements de téléchargement d'images déclenchés", imagesTriggered);
-            }
+            log.info("Batch image processing: {} image download events triggered.", imagesTriggered);
         } else {
-            log.debug("[Batch] Aucun produit à créer/mettre à jour sur {} lignes (tous à jour)", lines.size());
+            log.debug("Batch summary: 0 products to update/create out of {} total lines.", lines.size());
         }
-
-        return new BatchResult(created, updated, skipped, lastProduct);
+        return lastProduct;
     }
 
     private boolean isSame(String s1, String s2) {
-        if (s1 == null) {
+        if (s1 == null)
             return s2 == null;
-        }
         return s1.equals(s2);
     }
 }

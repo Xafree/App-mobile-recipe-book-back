@@ -6,9 +6,6 @@ import fr.gymgod.app.security.controller.dto.GoogleAuthRequest;
 import fr.gymgod.app.security.controller.dto.UserDto;
 import fr.gymgod.common.entities.user.UserAccount;
 import fr.gymgod.app.security.service.OrchestratorAuth;
-import fr.gymgod.common.image.ImageContentTypes;
-import fr.gymgod.common.image.ImageResizer;
-import fr.gymgod.common.image.ProcessedImage;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpSession;
 import jakarta.validation.Valid;
@@ -17,7 +14,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.UrlResource;
-import org.springframework.http.CacheControl;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -33,7 +30,6 @@ import java.net.MalformedURLException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -43,11 +39,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class AuthControllerAdapter {
 
-    /** Côté le plus long autorisé pour un avatar — largement suffisant face aux usages (44-80dp). */
-    private static final int MAX_AVATAR_DIMENSION = 600;
-
     private final OrchestratorAuth orchestratorAuth;
-    private final ImageResizer imageResizer;
 
     @Value("${path.image}")
     private String imageFolder;
@@ -169,13 +161,15 @@ public class AuthControllerAdapter {
         if (file.isEmpty()) {
             return ResponseEntity.badRequest().body(Map.of("error", "Fichier vide"));
         }
-        ProcessedImage processed = imageResizer.resize(
-                file.getInputStream(), file.getOriginalFilename(), MAX_AVATAR_DIMENSION);
-        String filename = UUID.randomUUID() + "." + processed.extension();
+        String original = file.getOriginalFilename();
+        String ext = (original != null && original.contains("."))
+                ? original.substring(original.lastIndexOf('.'))
+                : ".jpg";
+        String filename = UUID.randomUUID() + ext;
 
         Path dir = Paths.get(imageFolder, "avatars");
         Files.createDirectories(dir);
-        Files.write(dir.resolve(filename), processed.bytes());
+        Files.write(dir.resolve(filename), file.getBytes());
 
         String url = "/api/user/avatar/" + filename;
         orchestratorAuth.updateAvatarUrl(current.getUsername(), url);
@@ -193,8 +187,7 @@ public class AuthControllerAdapter {
             Resource resource = new UrlResource(file.toUri());
             if (resource.exists() && resource.isReadable()) {
                 return ResponseEntity.ok()
-                        .contentType(ImageContentTypes.resolve(filename))
-                        .cacheControl(CacheControl.maxAge(Duration.ofDays(30)).cachePublic())
+                        .contentType(MediaType.APPLICATION_OCTET_STREAM)
                         .body(resource);
             }
             return ResponseEntity.notFound().build();

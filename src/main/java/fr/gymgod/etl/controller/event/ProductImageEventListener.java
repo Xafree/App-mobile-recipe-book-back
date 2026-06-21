@@ -9,6 +9,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 @Component
 @RequiredArgsConstructor
@@ -21,14 +22,9 @@ public class ProductImageEventListener {
     @Value("${etl.image.download.enabled}")
     private boolean IS_IMAGE_DOWNLOAD_ENABLED;
 
-    // Pas de @Transactional sur toute la méthode : les téléchargements HTTP
-    // (jusqu'à 10s chacun) ne doivent pas retenir une connexion DB pendant
-    // qu'ils s'exécutent — productRepository.save() est déjà transactionnel
-    // par lui-même. Avec 20 threads de ce pool, garder la connexion ouverte
-    // pendant les downloads sature le pool HikariCP (défaut 10) et bloque
-    // toutes les requêtes API derrière.
     @Async("imageDownloadExecutor")
     @EventListener
+    @Transactional
     public void handleImageDownload(ProductImageEvent event) {
         if (!IS_IMAGE_DOWNLOAD_ENABLED) {
             return; // Skip download if disabled in config

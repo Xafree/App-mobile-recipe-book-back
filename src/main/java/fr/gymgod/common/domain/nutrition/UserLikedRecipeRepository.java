@@ -17,9 +17,6 @@ public interface UserLikedRecipeRepository extends JpaRepository<UserLikedRecipe
     /** Toutes les lignes aimées par un utilisateur — pour charger la liste "Favoris". */
     List<UserLikedRecipe> findAllByUserId(UUID userId);
 
-    /** Nombre de recettes aimées par un utilisateur — stat affichée sur son profil. */
-    long countByUserId(UUID userId);
-
     /** Retourne toutes les lignes userId/recipeId pour une liste de recettes — batch check. */
     List<UserLikedRecipe> findAllByUserIdAndRecipeIdIn(UUID userId, List<UUID> recipeIds);
 }

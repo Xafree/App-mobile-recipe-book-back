@@ -36,60 +36,20 @@ public class HttpRequestGateway implements FileDownloaderPort {
      *         download fails.
      */
     public String downloadFile(String url, String destinationPath) {
-        log.info("[Téléchargement] Démarrage depuis {}", url);
-        long startMs = System.currentTimeMillis();
-
-        // Téléchargement vers un fichier temporaire — le fichier de destination
-        // (potentiellement valide depuis un import précédent) n'est remplacé
-        // qu'une fois le téléchargement intégralement vérifié. Évite de
-        // détruire un bon fichier avec une réponse tronquée/erreur serveur.
-        String tempPath = destinationPath + ".download";
-
-        try (HttpGateway.HttpResponse response = httpGateway.get(url, 0)) { // 0 = pas de read timeout (fichier volumineux)
-            long expectedBytes = response.getContentLength();
-            if (expectedBytes >= 0) {
-                log.info("[Téléchargement] Taille annoncée par le serveur : {} Mo",
-                        String.format("%.1f", expectedBytes / (1024.0 * 1024.0)));
-            } else {
-                log.warn("[Téléchargement] Pas d'en-tête Content-Length — impossible de vérifier la complétude du download");
-            }
-
-            fileGateway.save(response.getInputStream(), tempPath);
-
-            long actualBytes = java.nio.file.Files.size(java.nio.file.Paths.get(tempPath));
-            long elapsedS = (System.currentTimeMillis() - startMs) / 1000;
-            double sizeMb = actualBytes / (1024.0 * 1024.0);
-            log.info("[Téléchargement] Terminé en {} s — {} reçu ({} Go)",
-                    elapsedS, tempPath, String.format("%.1f", sizeMb / 1024));
-
-            // Vérification de complétude : un téléchargement tronqué (connexion
-            // coupée en cours de route) laisse un fichier plus petit que prévu.
-            if (expectedBytes >= 0 && actualBytes != expectedBytes) {
-                log.error("[Téléchargement] Fichier incomplet : {} octets reçus sur {} attendus — fichier de destination conservé tel quel",
-                        actualBytes, expectedBytes);
-                java.nio.file.Files.deleteIfExists(java.nio.file.Paths.get(tempPath));
-                return null;
-            }
-
-            // Téléchargement complet validé : on remplace enfin la destination.
-            java.nio.file.Files.move(java.nio.file.Paths.get(tempPath), java.nio.file.Paths.get(destinationPath),
-                    java.nio.file.StandardCopyOption.REPLACE_EXISTING);
-            log.info("[Téléchargement] Fichier validé et déplacé vers {}", destinationPath);
+        log.info("Downloading file from {} to {}", url, destinationPath);
+        try (HttpGateway.HttpResponse response = httpGateway.get(url)) {
+            fileGateway.save(response.getInputStream(), destinationPath);
 
             long lastModified = response.getLastModified();
             if (lastModified == 0) {
-                log.debug("[Téléchargement] Pas d'en-tête Last-Modified dans la réponse.");
-                return String.valueOf(System.currentTimeMillis());
+                log.debug("No Last-Modified header found in response.");
+                return String.valueOf(System.currentTimeMillis()); // Fallback to current time
             }
+            log.debug("Last-Modified header found: {}", lastModified);
             return Instant.ofEpochMilli(lastModified).toString();
 
         } catch (IOException e) {
-            log.error("[Téléchargement] Échec depuis {} : {} — fichier de destination conservé tel quel", url, e.getMessage());
-            try {
-                java.nio.file.Files.deleteIfExists(java.nio.file.Paths.get(tempPath));
-            } catch (IOException ignored) {
-                // best effort
-            }
+            log.error("Error downloading file from {}: {}", url, e.getMessage());
             return null;
         }
     }
