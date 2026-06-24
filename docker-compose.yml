@@ -1,0 +1,35 @@
+version: '3.8'
+services:
+  db-postgres-nutrition:
+    container_name: pg_gymgod_nutrition
+    image: postgres:18.1-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: root
+      POSTGRES_PASSWORD: root
+      POSTGRES_DB: gymgod_nutrition
+    ports:
+      - "5432:5432"
+  db-postgres-user:
+    container_name: pg_gymgod_user
+    image: postgres:18.1-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: root
+      POSTGRES_PASSWORD: root
+      POSTGRES_DB: gymgod_user
+    ports:
+      - "5433:5432"
+  db-redis:
+    container_name: redis_gymgod
+    image: redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+  ocr-label-parser:
+    container_name: ocr_label_parser
+    build:
+      context: ../../ocr-label-parser
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
